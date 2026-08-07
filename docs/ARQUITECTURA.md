@@ -49,6 +49,10 @@ El Gateway expone **una sola API GraphQL** hacia el cliente. Por dentro, sus res
 | **Login/Profile Service** | Datos de perfil de usuario | gRPC | `profile-service` |
 | **Chat Service** | Canales, mensajes, conexiones WebSocket, subscriptions, publica a Redis Pub/Sub | GraphQL | `chat-service` |
 
+### Primer login — auto-provisioning
+
+Cuando un usuario se loguea por primera vez, no existe todavía un registro suyo en `db_profile`. El resolver `miPerfil` del Gateway maneja esto así: intenta `GetProfile` por gRPC; si Profile Service responde `NOT_FOUND`, el Gateway le pide los datos del usuario a Auth0 (`GET /userinfo`, con el mismo access token — el access token en sí no trae email/nombre/foto, solo el `sub`) y llama a `UpsertProfile` para crear el registro. Las siguientes veces, `GetProfile` ya lo encuentra directo.
+
 ### Database per service
 
 Cada servicio tiene su **propia base de datos lógica** (`db_profile` y `db_chat`), aunque ambas corran sobre el mismo contenedor de PostgreSQL. El Chat Service nunca lee directamente las tablas de usuarios del Login/Profile Service — si necesita ese dato, se lo pide al Gateway, que a su vez lo obtiene por gRPC. Compartir tablas entre servicios rompe el aislamiento que justifica tener microservicios separados en primer lugar.

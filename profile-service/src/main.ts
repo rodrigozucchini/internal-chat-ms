@@ -1,3 +1,4 @@
+import 'dotenv/config'; // tiene que ir primero: carga .env antes de que app.module.ts lea process.env
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';

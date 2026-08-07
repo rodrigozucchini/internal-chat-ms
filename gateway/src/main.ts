@@ -1,3 +1,4 @@
+import 'dotenv/config'; // tiene que ir primero: carga .env antes de que se lea process.env más abajo
 import { NestFactory } from '@nestjs/core';
 import { auth } from 'express-oauth2-jwt-bearer';
 import { AppModule } from './app.module';

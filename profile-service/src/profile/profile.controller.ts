@@ -1,5 +1,6 @@
 import { Controller } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcMethod, RpcException } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
 import { ProfileService } from './profile.service';
 
 @Controller()
@@ -7,8 +8,15 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @GrpcMethod('ProfileService', 'GetProfile')
-  getProfile(data: { id: string }) {
-    return this.profileService.getProfile(data.id);
+  async getProfile(data: { id: string }) {
+    const profile = await this.profileService.getProfile(data.id);
+    if (!profile) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: 'Perfil no encontrado',
+      });
+    }
+    return profile;
   }
 
   @GrpcMethod('ProfileService', 'UpsertProfile')
