@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package profile;
+
+service ProfileService {
+  rpc GetProfile (GetProfileRequest) returns (Profile);
+  rpc UpsertProfile (UpsertProfileRequest) returns (Profile);
+}
+
+// id = identificador de Auth0 (claim "sub"), ej: "google-oauth2|1234567890"
+message GetProfileRequest {
+  string id = 1;
+}
+
+message UpsertProfileRequest {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatarUrl = 4;
+}
+
+message Profile {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatarUrl = 4;
+  string createdAt = 5;
+}
