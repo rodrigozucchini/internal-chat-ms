@@ -14,40 +14,37 @@ Sistema interno de chat en tiempo real entre usuarios autenticados. Arquitectura
   (Auth0 JWT + Google)
       │
       ▼
-┌───────────────┐
-│   Gateway     │
-│ (resolvers    │
-│  manuales)    │
-└──────┬────────┘
+┌────────────────┐
+│    Gateway      │
+│ (GraphQL manual  │
+│  + Socket.IO)    │
+└──────┬───────────┘
        │
-       ├──gRPC──────► [ Login/Profile Service ] ──► [ Cache Perfil (Redis) ] ──► [ PostgreSQL: db_profile ]
+       ├──gRPC───────► [ Login/Profile Service ] ──► [ Cache Perfil (Redis) ] ──► [ PostgreSQL: db_profile ]
        │
-       └──GraphQL───► [ Chat Service ] ──► [ PostgreSQL: db_chat ]
-                            │
-                            ├──► [ Redis Pub/Sub ] (sincroniza instancias)
-                            │
-                            └──► GraphQL Subscription (WebSocket) ──► otros clientes conectados
+       └──Socket.IO──► [ Chat Service ] ──► [ PostgreSQL: db_chat ]
+                             │
+                             └──► rooms por channelId ──► otros clientes conectados al mismo canal
 ```
 
-El Gateway expone **una sola API GraphQL** hacia el cliente. Por dentro, sus resolvers llaman a cada servicio con el protocolo que le corresponde y combinan la respuesta — no hay stitching automático de schemas.
+El Gateway es el único punto de entrada del cliente: expone **GraphQL** para lo que es request/response puro (perfil) y **Socket.IO** para lo que es tiempo real (chat). Por dentro, sus resolvers/gateways llaman a cada servicio con el protocolo que le corresponde y combinan la respuesta — no hay stitching automático de schemas, ni un broker externo para el chat.
 
 ### Flujo detallado de un mensaje
 
-1. El cliente A envía un mensaje mediante una **mutation** GraphQL contra el Gateway.
-2. El Gateway rutea al Chat Service (GraphQL directo), que valida el request y **persiste el mensaje** en `db_chat`.
-3. Publica el evento en **Redis Pub/Sub**, para que todas las instancias del Chat Service se enteren, no solo la que atendió el mutation.
-4. La instancia que mantiene la conexión WebSocket del cliente B dispara la **subscription** correspondiente y le empuja el mensaje en tiempo real.
-5. Si B está conectado: lo recibe al instante + alerta in-app (badge/toast) en la misma conexión.
-6. Si B no está conectado: el mensaje queda persistido; al reconectar, lo obtiene con un fetch normal de historial.
-7. Si la respuesta necesita datos de perfil (ej: nombre del que envió), el Gateway le pega por **gRPC** al Login/Profile Service y combina ambas respuestas antes de devolverle todo al cliente.
+1. El cliente A se conecta al Gateway por Socket.IO, autenticando el handshake con su JWT de Auth0 (el Gateway lo valida a mano contra el JWKS de Auth0 y guarda el `sub` en la conexión). Al aceptar la conexión, el Gateway abre **su propia conexión Socket.IO hacia Chat Service, una por cada cliente conectado** — no una única conexión compartida entre todos.
+2. El cliente A hace `join` a la sala de su canal y emite el evento `sendMessage`; el Gateway reenvía ambos eventos 1 a 1 por esa conexión emparejada, sin guardar ningún estado de rooms propio — solo cambia el `senderId` que venga del cliente por el `sub` real del JWT antes de reenviar.
+3. Chat Service recibe la conexión del Gateway como si fuera un cliente más: hace el `join` real a la sala del canal, **persiste el mensaje** en `db_chat` y hace `io.to(room).emit('messageReceived', ...)` sobre su propio servidor de sockets — ahí vive el reparto real a todos los que están en ese canal.
+4. Cada conexión emparejada del Gateway que esté en esa sala recibe el evento y lo reenvía, también 1 a 1, al cliente que le corresponde (por ejemplo, el cliente B).
+5. Si B no está conectado en ese momento: el mensaje queda persistido igual; al reconectar, lo pide con el evento `getMessages` (con ack), que trae el historial completo del canal.
+6. Si la respuesta necesita datos de perfil (ej: nombre del que envió), el Gateway le pega por **gRPC** al Login/Profile Service y combina ambas respuestas antes de devolverle todo al cliente.
 
 ## 3. Servicios
 
 | Servicio | Responsabilidad | Protocolo interno | Contenedor |
 |---|---|---|---|
-| **Gateway** | Valida JWT de Auth0, combina las respuestas de los demás servicios con resolvers manuales | GraphQL (hacia el cliente) | `gateway` |
+| **Gateway** | Valida JWT de Auth0, combina las respuestas de los demás servicios con resolvers/gateways manuales | GraphQL (perfil) + Socket.IO (chat) hacia el cliente | `gateway` |
 | **Login/Profile Service** | Datos de perfil de usuario | gRPC | `profile-service` |
-| **Chat Service** | Canales, mensajes, conexiones WebSocket, subscriptions, publica a Redis Pub/Sub | GraphQL | `chat-service` |
+| **Chat Service** | Canales, mensajes, conexiones Socket.IO, rooms por canal | Socket.IO | `chat-service` |
 
 ### Primer login — auto-provisioning
 
@@ -62,11 +59,10 @@ Cada servicio tiene su **propia base de datos lógica** (`db_profile` y `db_chat
 | Capa / Módulo | Tecnología | Patrón / Tema de System Design |
 |---|---|---|
 | Autenticación | Auth0 (OAuth 2.0 / OIDC + Google) | Seguridad — validación de JWT, RBAC |
-| API Gateway | GraphQL con resolvers manuales (sin Federation) | Comunicación — agregación manual entre servicios |
+| API Gateway | GraphQL con resolvers manuales (sin Federation) para perfil | Comunicación — agregación manual entre servicios |
 | Login/Profile Service ↔ Gateway | gRPC | Comunicación interna tipada (`.proto`) |
 | Caché | Redis (perfil de usuario — key-value, TTL) | Reducción de latencia en lookups repetidos |
-| Tiempo real | GraphQL Subscriptions sobre WebSocket (`graphql-ws`) | Comunicación bidireccional persistente |
-| Escalado del chat | Redis Pub/Sub | Sincronización de eventos entre instancias |
+| Tiempo real | Socket.IO — eventos con ack (`sendMessage`, `getMessages`) + rooms por canal (`messageReceived`) | Comunicación bidireccional persistente |
 | Persistencia | PostgreSQL — una base por servicio | Bases de datos relacional |
 | Contenerización | Docker + Docker Compose | Orquestación local, aislamiento por servicio |
 
@@ -95,14 +91,14 @@ Cada servicio de aplicación (`gateway`, `profile-service`, `chat-service`) tien
 
 ## 7. Alertas
 
-Sin frontend, la "alerta" es simplemente el **evento de la subscription** entregado por WebSocket apenas llega un mensaje — cualquier cliente conectado a esa subscription (Insomnia, un script, o a futuro una UI) lo recibe en tiempo real. No hay badge/toast porque no hay interfaz que lo renderice todavía; eso queda para cuando exista un frontend. Push notifications del sistema operativo (Web Push API + Service Worker) tampoco se implementan en esta fase.
+Sin frontend, la "alerta" es simplemente el **evento `messageReceived`** de Socket.IO, entregado por WebSocket apenas llega un mensaje — cualquier cliente unido a esa sala (Insomnia, un script, o a futuro una UI) lo recibe en tiempo real. No hay badge/toast porque no hay interfaz que lo renderice todavía; eso queda para cuando exista un frontend. Push notifications del sistema operativo (Web Push API + Service Worker) tampoco se implementan en esta fase.
 
 ## 8. Sin frontend — cómo se prueba el sistema
 
-Este proyecto se construye y valida sin interfaz web. Todo se prueba con **Insomnia**, que soporta nativamente los tres protocolos que usa el sistema:
+Este proyecto se construye y valida sin interfaz web. Todo se prueba con **Insomnia**, que soporta nativamente los protocolos que usa el sistema:
 
-- **GraphQL** (queries y mutations) contra el Gateway
-- **GraphQL Subscriptions** (tiempo real, sobre WebSocket) contra el Gateway
+- **GraphQL** (query `miPerfil`) contra el Gateway
+- **Socket.IO** (`joinChannel`, `sendMessage`, `getMessages`, `messageReceived`) contra el Gateway — Insomnia tiene un cliente Socket.IO propio; también hay scripts de prueba (`test-chat-client.js` en cada servicio) para probarlo desde la terminal
 - **gRPC** — importando el `.proto` del Login/Profile Service, para probarlo aislado sin pasar por el Gateway
 
 Para el login, la Application en Auth0 es de tipo **Native** con **Device Authorization Flow** — el mismo mecanismo que usa `gh auth login`: se abre el navegador una sola vez para autorizar, y devuelve un JWT real que se usa en los requests de Insomnia. No requiere ninguna pantalla de login propia.

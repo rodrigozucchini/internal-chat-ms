@@ -16,24 +16,24 @@ Sistema interno de chat en tiempo real entre usuarios autenticados, construido c
 - **Auth**: Auth0 (OAuth 2.0 / OIDC + Google)
 - **API**: GraphQL en el Gateway, con resolvers manuales (sin Federation)
 - **Comunicación interna**: gRPC (Gateway ↔ Login/Profile Service)
-- **Tiempo real**: GraphQL Subscriptions sobre WebSocket
+- **Tiempo real**: Socket.IO (eventos con ack + rooms por canal)
 - **Base de datos**: PostgreSQL (una base por servicio)
-- **Cache**: Redis (perfil de usuario) + Redis Pub/Sub (sincronizar Chat Service entre instancias)
+- **Cache**: Redis (perfil de usuario)
 - **Infra**: Docker + Docker Compose
 
 ## Arquitectura
 
 ```
-Insomnia ─► Auth0 ─► Gateway (GraphQL, resolvers manuales)
+Insomnia ─► Auth0 ─► Gateway (GraphQL para perfil, Socket.IO para chat)
                         │
               ┌─────────┴─────────┐
-           gRPC                GraphQL
+           gRPC              Socket.IO
               ▼                   ▼
      Login/Profile Service   Chat Service
               │                   │
          db_profile            db_chat
                                   │
-                          Redis Pub/Sub ──► WebSocket ──► otros clientes
+                          rooms por canal ──► otros clientes conectados
 ```
 
 Documentación técnica completa, con el flujo detallado de un mensaje y las decisiones de diseño: [`docs/ARQUITECTURA.md`](./docs/ARQUITECTURA.md).

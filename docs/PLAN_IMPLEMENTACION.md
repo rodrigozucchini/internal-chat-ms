@@ -31,8 +31,12 @@ Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener
 - [x] Persistencia de mensajes — cubierto por `sendMessage`/`messages`, confirmado en Postgres
 
 ## Fase 4 — Integración Gateway ↔ Chat Service
-- Resolvers en el Gateway que rutean al Chat Service
-- Proxy de subscriptions desde el cliente hasta el Chat Service a través del Gateway
+- [x] Resolvers en el Gateway que rutean al Chat Service — `senderId` dejó de venir del cliente, lo inyecta el Gateway desde el `sub` del JWT
+- [x] Proxy de subscriptions desde el cliente hasta el Chat Service a través del Gateway
+
+**Nota — 2026-08-08:** después de cerrar esta fase, se migró todo el transporte del chat (Fase 3 y 4) de GraphQL Subscriptions/`graphql-ws` a **Socket.IO**. Fue una decisión explícita del usuario por claridad/aprendizaje, no una necesidad técnica — el mecanismo de fondo (persistencia en Postgres + notificación en memoria del proceso, sin Redis ni broker externo) es el mismo que se describe en el punto de Subscription más abajo, solo cambió la librería: `PubSub`+`filter` de GraphQL se reemplazó por `rooms` nativas de Socket.IO, y `sendMessage`/`messages` pasaron de mutation/query a eventos con ack (`sendMessage`, `getMessages`). El detalle está en `docs/ARQUITECTURA.md`.
+
+**Corrección — mismo día:** la primera versión de la migración le hizo abrir al Gateway **una sola conexión Socket.IO compartida** hacia Chat Service, y lo obligó a mantener su propia tabla de rooms para repartir mensajes entre sus clientes — lógica de más que no le correspondía (y con un bug real: si esa conexión se cortaba, perdía silenciosamente todos los joins). Se corrigió a **una conexión propia por cada cliente conectado al Gateway**: así Chat Service hace el join y el reparto real con su propia sala (ya la tenía), y el Gateway vuelve a ser un relay fino sin estado propio.
 
 ## ~~Fase 5 — Tiempo real multi-instancia~~ (cortada)
 

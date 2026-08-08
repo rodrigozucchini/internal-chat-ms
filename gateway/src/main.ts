@@ -16,6 +16,6 @@ async function bootstrap() {
   const port = process.env.PORT;
   if (!port) throw new Error('Falta la variable de entorno PORT (.env)');
   await app.listen(port, '0.0.0.0');
-  console.log(`Gateway (GraphQL) escuchando en 0.0.0.0:${port}`);
+  console.log(`Gateway (GraphQL + Socket.IO) escuchando en 0.0.0.0:${port}`);
 }
 bootstrap();
