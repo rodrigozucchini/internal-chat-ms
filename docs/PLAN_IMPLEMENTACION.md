@@ -25,18 +25,18 @@ Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener
 
 ## Fase 3 — Chat Service (GraphQL + WebSocket)
 - [x] Inicializar el proyecto Nest — probado: arranca correctamente
-- [ ] Tablas `channels` y `messages` en Postgres (`db_chat`), vía TypeORM
-- [ ] Mutation `sendMessage`
-- [ ] Subscription `messageReceived` (GraphQL Subscriptions sobre WebSocket)
-- [ ] Persistencia de mensajes — probar que quedan guardados en `db_chat`
+- [x] Tablas `channels` y `messages` en Postgres (`db_chat`), vía TypeORM — probado: se crearon con la relación (FK `channelId`) correcta
+- [x] Mutation `sendMessage` — probada: crea el canal automáticamente y guarda el mensaje. Se agregó también la query `messages(channelId)` (GraphQL exige al menos una Query en el schema, no alcanza con solo una Mutation)
+- [x] Subscription `messageReceived` (GraphQL Subscriptions sobre WebSocket), con `PubSub` en memoria — **solución definitiva**, no intermedia (ver nota en la Fase 5, cortada). Probada de punta a punta con un cliente `graphql-ws` real: el mensaje llegó por WebSocket apenas se publicó
+- [x] Persistencia de mensajes — cubierto por `sendMessage`/`messages`, confirmado en Postgres
 
 ## Fase 4 — Integración Gateway ↔ Chat Service
 - Resolvers en el Gateway que rutean al Chat Service
 - Proxy de subscriptions desde el cliente hasta el Chat Service a través del Gateway
 
-## Fase 5 — Tiempo real multi-instancia
-- Redis Pub/Sub entre instancias del Chat Service
-- Probar con 2 instancias corriendo: un mensaje tiene que llegarle a un cliente conectado a la otra instancia
+## ~~Fase 5 — Tiempo real multi-instancia~~ (cortada)
+
+Decisión: no se implementa. No hay load balancer planeado para ningún servicio del proyecto — sin eso, nunca va a existir más de una instancia de `chat-service` corriendo al mismo tiempo, así que el `PubSub` en memoria de la Fase 3 (paso "Subscription `messageReceived`") queda como la solución **definitiva**, no como algo temporal a reemplazar por Redis. Si más adelante se suma Kubernetes (u otro orquestador) y se corre `chat-service` con réplicas reales, ahí sí esta fase se retoma — Redis Pub/Sub o Postgres `LISTEN`/`NOTIFY` serían las opciones, sin agregar infraestructura nueva a menos que se elija Redis.
 
 ## Fase 6 — Alertas in-app
 - Contador de mensajes no leídos

@@ -2,11 +2,12 @@ import 'dotenv/config'; // tiene que ir primero: carga .env antes de que app.mod
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
-// Placeholder de bootstrap — se reemplaza por un servidor GraphQL + WebSocket
-// en los próximos pasos de la Fase 3.
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.init();
-  console.log('chat-service inicializado (todavía sin GraphQL/WebSocket)');
+
+  const port = process.env.PORT;
+  if (!port) throw new Error('Falta la variable de entorno PORT (.env)');
+  await app.listen(port, '0.0.0.0');
+  console.log(`Chat Service (GraphQL) escuchando en 0.0.0.0:${port}`);
 }
 bootstrap();
