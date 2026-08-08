@@ -8,12 +8,13 @@ async function bootstrap() {
 
   app.use(
     auth({
-      audience: process.env.AUTH0_AUDIENCE || 'https://internalsystem/',
-      issuerBaseURL: `https://${process.env.AUTH0_DOMAIN || 'dev-icyc53hvag0w7sfw.us.auth0.com'}/`,
+      audience: process.env.AUTH0_AUDIENCE,
+      issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
     }),
   );
 
-  const port = process.env.PORT || 4001; // 4000 puede estar ocupado en la máquina local
+  const port = process.env.PORT;
+  if (!port) throw new Error('Falta la variable de entorno PORT (.env)');
   await app.listen(port, '0.0.0.0');
   console.log(`Gateway (GraphQL) escuchando en 0.0.0.0:${port}`);
 }

@@ -6,9 +6,8 @@ Servidor GraphQL (Nest) expuesto al cliente. Sin Federation — resolvers manual
 
 Responsabilidades:
 - Validar JWT de Auth0 — middleware oficial `express-oauth2-jwt-bearer`, aplicado globalmente
-- Rate limiting en memoria (`@nestjs/throttler`), aplicado solo a la query `miPerfil`
 - Rutear y combinar respuestas de los demás servicios
 
 Escucha en `0.0.0.0:4001`.
 
-Fase 2 del [plan de implementación](../docs/PLAN_IMPLEMENTACION.md) — falta solo probar el login completo con un token real.
+Fase 2 del [plan de implementación](../docs/PLAN_IMPLEMENTACION.md) — completa.

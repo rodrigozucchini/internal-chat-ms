@@ -1,13 +1,11 @@
-import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
+import { Inject, OnModuleInit } from '@nestjs/common';
 import { Context, Query, Resolver } from '@nestjs/graphql';
 import { ClientGrpc } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { firstValueFrom, Observable } from 'rxjs';
-import { GqlThrottlerGuard } from '../rate-limit/gql-throttler.guard';
 import { Profile } from './profile.type';
 
-const AUTH0_DOMAIN =
-  process.env.AUTH0_DOMAIN || 'dev-icyc53hvag0w7sfw.us.auth0.com';
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 
 interface UpsertProfileInput {
   id: string;
@@ -32,7 +30,6 @@ export class ProfileResolver implements OnModuleInit {
       this.client.getService<ProfileServiceGrpc>('ProfileService');
   }
 
-  @UseGuards(GqlThrottlerGuard)
   @Query(() => Profile)
   async miPerfil(@Context() context): Promise<Profile> {
     const { sub } = context.req.auth.payload;

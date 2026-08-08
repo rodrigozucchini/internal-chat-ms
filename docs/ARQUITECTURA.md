@@ -15,7 +15,7 @@ Sistema interno de chat en tiempo real entre usuarios autenticados. Arquitectura
       │
       ▼
 ┌───────────────┐
-│   Gateway     │──────► [ Rate Limiter en memoria — solo en `miPerfil` ]
+│   Gateway     │
 │ (resolvers    │
 │  manuales)    │
 └──────┬────────┘
@@ -45,7 +45,7 @@ El Gateway expone **una sola API GraphQL** hacia el cliente. Por dentro, sus res
 
 | Servicio | Responsabilidad | Protocolo interno | Contenedor |
 |---|---|---|---|
-| **Gateway** | Valida JWT de Auth0, rate limiting, combina las respuestas de los demás servicios con resolvers manuales | GraphQL (hacia el cliente) | `gateway` |
+| **Gateway** | Valida JWT de Auth0, combina las respuestas de los demás servicios con resolvers manuales | GraphQL (hacia el cliente) | `gateway` |
 | **Login/Profile Service** | Datos de perfil de usuario | gRPC | `profile-service` |
 | **Chat Service** | Canales, mensajes, conexiones WebSocket, subscriptions, publica a Redis Pub/Sub | GraphQL | `chat-service` |
 
@@ -64,7 +64,6 @@ Cada servicio tiene su **propia base de datos lógica** (`db_profile` y `db_chat
 | Autenticación | Auth0 (OAuth 2.0 / OIDC + Google) | Seguridad — validación de JWT, RBAC |
 | API Gateway | GraphQL con resolvers manuales (sin Federation) | Comunicación — agregación manual entre servicios |
 | Login/Profile Service ↔ Gateway | gRPC | Comunicación interna tipada (`.proto`) |
-| Resiliencia | `@nestjs/throttler`, en memoria, aplicado solo a `miPerfil` | Rate limiting por usuario — sin Redis porque no hay load balancer que requiera un contador compartido entre instancias |
 | Caché | Redis (perfil de usuario — key-value, TTL) | Reducción de latencia en lookups repetidos |
 | Tiempo real | GraphQL Subscriptions sobre WebSocket (`graphql-ws`) | Comunicación bidireccional persistente |
 | Escalado del chat | Redis Pub/Sub | Sincronización de eventos entre instancias |

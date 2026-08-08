@@ -19,15 +19,16 @@ Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener
 ## Fase 2 — Gateway básico + Auth0
 - [x] Servidor GraphQL mínimo — probado: `{ ping }` responde `pong` en `localhost:4001/graphql`
 - [x] Middleware que valida el JWT de Auth0 — con `express-oauth2-jwt-bearer` (paquete oficial), protege todo el Gateway; probado: rechaza requests sin token con 401
-- [x] Rate limiter — con `@nestjs/throttler` (oficial de Nest), en memoria (sin Redis, no hay load balancer planeado); queda listo para aplicarse en `miPerfil`, todavía sin usar
-- [x] Resolver que llama a Profile Service por gRPC (query `miPerfil`) — con `GqlThrottlerGuard` aplicado; probado: rechaza sin token, gRPC client conecta bien a Profile Service
+- [~] ~~Rate limiter~~ — implementado con `@nestjs/throttler` y después **removido del proyecto**: no se necesita para este alcance
+- [x] Resolver que llama a Profile Service por gRPC (query `miPerfil`) — probado: rechaza sin token, gRPC client conecta bien a Profile Service
 - [x] Probar el login completo — con Device Flow real (Google → Auth0 → Gateway → gRPC); se encontró y arregló un bug real: el primer login de un usuario no tenía perfil creado. Se agregó auto-provisioning: si `GetProfile` devuelve `NOT_FOUND`, el Gateway pide los datos a `/userinfo` de Auth0 y crea el perfil con `UpsertProfile`
 
 ## Fase 3 — Chat Service (GraphQL + WebSocket)
-- Tablas `channels` y `messages` en Postgres (`db_chat`)
-- Mutation `sendMessage` y subscription `messageReceived`
-- Conexión WebSocket (`graphql-ws`)
-- Persistencia de mensajes
+- [x] Inicializar el proyecto Nest — probado: arranca correctamente
+- [ ] Tablas `channels` y `messages` en Postgres (`db_chat`), vía TypeORM
+- [ ] Mutation `sendMessage`
+- [ ] Subscription `messageReceived` (GraphQL Subscriptions sobre WebSocket)
+- [ ] Persistencia de mensajes — probar que quedan guardados en `db_chat`
 
 ## Fase 4 — Integración Gateway ↔ Chat Service
 - Resolvers en el Gateway que rutean al Chat Service

@@ -19,7 +19,6 @@ Sistema interno de chat en tiempo real entre usuarios autenticados, construido c
 - **Tiempo real**: GraphQL Subscriptions sobre WebSocket
 - **Base de datos**: PostgreSQL (una base por servicio)
 - **Cache**: Redis (perfil de usuario) + Redis Pub/Sub (sincronizar Chat Service entre instancias)
-- **Rate limiting**: en memoria (`@nestjs/throttler`), solo en `miPerfil` — no hay load balancer, así que no hace falta compartir el contador entre instancias
 - **Infra**: Docker + Docker Compose
 
 ## Arquitectura
@@ -45,7 +44,7 @@ Orden de construcción del proyecto, por fases: [`docs/PLAN_IMPLEMENTACION.md`](
 
 | Servicio | Rol | Protocolo |
 |---|---|---|
-| `gateway` | Valida auth, rate limiting, combina las respuestas de los demás servicios | GraphQL hacia el cliente |
+| `gateway` | Valida auth, combina las respuestas de los demás servicios | GraphQL hacia el cliente |
 | `profile-service` | Perfil de usuario | gRPC |
 | `chat-service` | Canales, mensajes, WebSocket | GraphQL |
 

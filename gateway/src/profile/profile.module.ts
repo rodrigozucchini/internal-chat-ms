@@ -12,7 +12,7 @@ import { ProfileResolver } from './profile.resolver';
         options: {
           package: 'profile',
           protoPath: join(__dirname, '../proto/profile.proto'),
-          url: process.env.PROFILE_SERVICE_URL || 'localhost:5000',
+          url: process.env.PROFILE_SERVICE_URL,
         },
       },
     ]),
