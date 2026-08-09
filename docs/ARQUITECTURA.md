@@ -14,27 +14,28 @@ Sistema interno de chat en tiempo real entre usuarios autenticados. Arquitectura
   (Auth0 JWT + Google)
       │
       ▼
-┌────────────────┐
-│    Gateway      │
-│ (GraphQL manual  │
-│  + Socket.IO)    │
-└──────┬───────────┘
-       │
-       ├──gRPC───────► [ Login/Profile Service ] ──► [ Cache Perfil (Redis) ] ──► [ PostgreSQL: db_profile ]
-       │
-       └──Socket.IO──► [ Chat Service ] ──► [ PostgreSQL: db_chat ]
-                             │
-                             └──► rooms por channelId ──► otros clientes conectados al mismo canal
+┌──────────────────────────┐
+│          Gateway          │
+│ GraphQL (perfil) +         │
+│ Socket.IO (chat) al cliente │
+│ persiste el chat en db_chat │
+└──────────────┬──────────────┘
+               │
+               ├──gRPC────► [ Login/Profile Service ] ──► [ Cache Perfil (Redis) ] ──► [ PostgreSQL: db_profile ]
+               │
+               └─TypeORM──► [ PostgreSQL: db_chat ]
+                                   │
+                             rooms por channelId ──► otros clientes conectados al mismo canal
 ```
 
-El Gateway es el único punto de entrada del cliente: expone **GraphQL** para lo que es request/response puro (perfil) y **Socket.IO** para lo que es tiempo real (chat). Por dentro, sus resolvers/gateways llaman a cada servicio con el protocolo que le corresponde y combinan la respuesta — no hay stitching automático de schemas, ni un broker externo para el chat.
+El Gateway es el único punto de entrada del cliente, y desde la fusión de la Fase 4 también es donde vive el chat entero — ya no hay un tercer proceso en el medio. Expone **GraphQL** para lo que es request/response puro (perfil, vía gRPC a Profile Service) y **Socket.IO** para lo que es tiempo real (chat, persistido directo por el propio Gateway).
 
 ### Flujo detallado de un mensaje
 
-1. El cliente A se conecta al Gateway por Socket.IO, autenticando el handshake con su JWT de Auth0 (el Gateway lo valida a mano contra el JWKS de Auth0 y guarda el `sub` en la conexión). Al aceptar la conexión, el Gateway abre **su propia conexión Socket.IO hacia Chat Service, una por cada cliente conectado** — no una única conexión compartida entre todos.
-2. El cliente A hace `join` a la sala de su canal y emite el evento `sendMessage`; el Gateway reenvía ambos eventos 1 a 1 por esa conexión emparejada, sin guardar ningún estado de rooms propio — solo cambia el `senderId` que venga del cliente por el `sub` real del JWT antes de reenviar.
-3. Chat Service recibe la conexión del Gateway como si fuera un cliente más: hace el `join` real a la sala del canal, **persiste el mensaje** en `db_chat` y hace `io.to(room).emit('messageReceived', ...)` sobre su propio servidor de sockets — ahí vive el reparto real a todos los que están en ese canal.
-4. Cada conexión emparejada del Gateway que esté en esa sala recibe el evento y lo reenvía, también 1 a 1, al cliente que le corresponde (por ejemplo, el cliente B).
+1. El cliente A se conecta al Gateway por Socket.IO, autenticando el handshake con su JWT de Auth0 (el Gateway lo valida a mano contra el JWKS de Auth0 y guarda el `sub` en la conexión).
+2. El cliente A hace `join` a la sala de su canal y emite el evento `sendMessage`. El `channelId` no se busca ni se crea en ninguna base — se calcula (`[senderId, recipientId].sort().join(':')`), porque el chat es siempre 1 a 1. El Gateway ignora cualquier `senderId` que mande el cliente y usa el `sub` real del JWT.
+3. El Gateway **persiste el mensaje** directo en `db_chat` (vía TypeORM, sin ningún salto de red de por medio) y hace `server.to(room).emit('messageReceived', ...)` sobre su propio servidor de sockets — ahí vive el reparto real a todos los que están en ese canal.
+4. Cada cliente unido a esa sala (por ejemplo, el cliente B) recibe el evento al instante.
 5. Si B no está conectado en ese momento: el mensaje queda persistido igual; al reconectar, lo pide con el evento `getMessages` (con ack), que trae el historial completo del canal.
 6. Si la respuesta necesita datos de perfil (ej: nombre del que envió), el Gateway le pega por **gRPC** al Login/Profile Service y combina ambas respuestas antes de devolverle todo al cliente.
 
@@ -42,9 +43,8 @@ El Gateway es el único punto de entrada del cliente: expone **GraphQL** para lo
 
 | Servicio | Responsabilidad | Protocolo interno | Contenedor |
 |---|---|---|---|
-| **Gateway** | Valida JWT de Auth0, combina las respuestas de los demás servicios con resolvers/gateways manuales | GraphQL (perfil) + Socket.IO (chat) hacia el cliente | `gateway` |
+| **Gateway** | Valida JWT de Auth0, expone perfil y chat al cliente, persiste el chat directo en `db_chat` | GraphQL + Socket.IO hacia el cliente, gRPC hacia Profile Service | `gateway` |
 | **Login/Profile Service** | Datos de perfil de usuario | gRPC | `profile-service` |
-| **Chat Service** | Canales, mensajes, conexiones Socket.IO, rooms por canal | Socket.IO | `chat-service` |
 
 ### Primer login — auto-provisioning
 
@@ -52,7 +52,7 @@ Cuando un usuario se loguea por primera vez, no existe todavía un registro suyo
 
 ### Database per service
 
-Cada servicio tiene su **propia base de datos lógica** (`db_profile` y `db_chat`), aunque ambas corran sobre el mismo contenedor de PostgreSQL. El Chat Service nunca lee directamente las tablas de usuarios del Login/Profile Service — si necesita ese dato, se lo pide al Gateway, que a su vez lo obtiene por gRPC. Compartir tablas entre servicios rompe el aislamiento que justifica tener microservicios separados en primer lugar.
+`db_profile` y `db_chat` siguen siendo dos bases lógicas separadas, aunque corran sobre el mismo contenedor de PostgreSQL — eso no cambió al fusionar el chat en el Gateway. Lo que sí cambió es quién las toca: el Gateway tiene acceso directo a `db_chat` (la persistencia del chat vive ahí mismo, ya no hay un proceso intermedio), pero **nunca** toca `db_profile` directamente — para datos de perfil siempre pasa por gRPC a Profile Service. El límite de aislamiento no es "un proceso por base", es "los datos de perfil solo se acceden a través de su servicio dueño".
 
 ## 4. Stack tecnológico
 
@@ -72,12 +72,11 @@ Cada servicio tiene su **propia base de datos lógica** (`db_profile` y `db_chat
 services:
   gateway
   profile-service
-  chat-service
   postgres      # con dos databases: db_profile, db_chat
   redis
 ```
 
-Cada servicio de aplicación (`gateway`, `profile-service`, `chat-service`) tiene su propia imagen y `Dockerfile`, orquestados en conjunto mediante `docker-compose.yml` para levantar todo el entorno de desarrollo con un solo comando.
+Cada servicio de aplicación (`gateway`, `profile-service`) tiene su propia imagen y `Dockerfile`, orquestados en conjunto mediante `docker-compose.yml` para levantar todo el entorno de desarrollo con un solo comando.
 
 ## 6. Seguridad
 
@@ -98,7 +97,7 @@ Sin frontend, la "alerta" es simplemente el **evento `messageReceived`** de Sock
 Este proyecto se construye y valida sin interfaz web. Todo se prueba con **Insomnia**, que soporta nativamente los protocolos que usa el sistema:
 
 - **GraphQL** (query `miPerfil`) contra el Gateway
-- **Socket.IO** (`joinChannel`, `sendMessage`, `getMessages`, `messageReceived`) contra el Gateway — Insomnia tiene un cliente Socket.IO propio; también hay scripts de prueba (`test-chat-client.js` en cada servicio) para probarlo desde la terminal
+- **Socket.IO** (`joinChannel`, `sendMessage`, `getMessages`, `messageReceived`) contra el Gateway — Insomnia tiene un cliente Socket.IO propio; también hay un script de prueba (`gateway/test-chat-client.js`) para probarlo desde la terminal con un JWT real
 - **gRPC** — importando el `.proto` del Login/Profile Service, para probarlo aislado sin pasar por el Gateway
 
 Para el login, la Application en Auth0 es de tipo **Native** con **Device Authorization Flow** — el mismo mecanismo que usa `gh auth login`: se abre el navegador una sola vez para autorizar, y devuelve un JWT real que se usa en los requests de Insomnia. No requiere ninguna pantalla de login propia.

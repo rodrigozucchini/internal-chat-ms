@@ -38,6 +38,10 @@ Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener
 
 **Corrección — mismo día:** la primera versión de la migración le hizo abrir al Gateway **una sola conexión Socket.IO compartida** hacia Chat Service, y lo obligó a mantener su propia tabla de rooms para repartir mensajes entre sus clientes — lógica de más que no le correspondía (y con un bug real: si esa conexión se cortaba, perdía silenciosamente todos los joins). Se corrigió a **una conexión propia por cada cliente conectado al Gateway**: así Chat Service hace el join y el reparto real con su propia sala (ya la tenía), y el Gateway vuelve a ser un relay fino sin estado propio.
 
+**Fusión — 2026-08-09:** se retiró `chat-service` como proceso aparte. Toda su lógica (persistencia en Postgres + Socket.IO con rooms) se movió tal cual adentro del Gateway, que pasó a tener su propia conexión TypeORM a `db_chat` además del cliente gRPC hacia Profile Service. Motivo: la capa de relay entre dos procesos (conexión propia por cliente, reenvío genérico) era la parte que más costaba entender estudiando el proyecto, y con una sola instancia de cada servicio no aportaba nada real — practicar ese patrón ya quedó hecho y documentado más arriba. Quedan **dos** servicios, no tres: `gateway` (perfil + chat) y `profile-service`.
+
+De paso se sacó la tabla `channels`: el `channelId` ya no se busca ni se crea en la base — se calcula (`[userA, userB].sort().join(':')`), porque el chat siempre es 1 a 1. Menos una tabla, menos un viaje a Postgres por mensaje.
+
 ## ~~Fase 5 — Tiempo real multi-instancia~~ (cortada)
 
 Decisión: no se implementa. No hay load balancer planeado para ningún servicio del proyecto — sin eso, nunca va a existir más de una instancia de `chat-service` corriendo al mismo tiempo, así que el `PubSub` en memoria de la Fase 3 (paso "Subscription `messageReceived`") queda como la solución **definitiva**, no como algo temporal a reemplazar por Redis. Si más adelante se suma Kubernetes (u otro orquestador) y se corre `chat-service` con réplicas reales, ahí sí esta fase se retoma — Redis Pub/Sub o Postgres `LISTEN`/`NOTIFY` serían las opciones, sin agregar infraestructura nueva a menos que se elija Redis.
@@ -47,9 +51,9 @@ Decisión: no se implementa. No hay load balancer planeado para ningún servicio
 - Toast/notificación dentro de la UI al llegar un mensaje
 
 ## Fase 7 — Dockerización completa
-- `Dockerfile` por servicio
-- `docker-compose.yml` final, todo junto
-- Variables de entorno / `.env`
+- [x] `Dockerfile` por servicio (`gateway`, `profile-service`) — multi-stage (build con devDependencies + `nest build`, imagen final solo con dependencias de producción y el `dist/` ya compilado), imagen base `node:22-alpine`
+- [x] `docker-compose.yml` final, todo junto — `gateway` y `profile-service` se suman a `postgres`/`redis`, con `depends_on` esperando los healthchecks que ya existían
+- [x] Variables de entorno / `.env` — cada servicio reusa su propio `.env` (`env_file`), y `docker-compose.yml` solo pisa lo que cambia por correr en red de Docker (`DB_HOST`, `DB_PORT`, `REDIS_HOST`, `REDIS_PORT`, `PROFILE_SERVICE_URL` pasan de `localhost`/puerto mapeado a los hostnames internos de los servicios)
 
 ## Fase 8 — Pulido y seguridad
 - TLS/WSS

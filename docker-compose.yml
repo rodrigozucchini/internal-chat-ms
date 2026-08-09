@@ -31,6 +31,41 @@ services:
       timeout: 5s
       retries: 5
 
+  profile-service:
+    build: ./profile-service
+    container_name: internal-chat-profile-service
+    restart: unless-stopped
+    env_file: ./profile-service/.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  gateway:
+    build: ./gateway
+    container_name: internal-chat-gateway
+    restart: unless-stopped
+    env_file: ./gateway/.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      PROFILE_SERVICE_URL: profile-service:5000
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      profile-service:
+        condition: service_started
+
 volumes:
   postgres_data:
   redis_data:

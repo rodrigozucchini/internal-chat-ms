@@ -1,12 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
-import { Channel } from './channel.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('messages')
 export class Message {
@@ -15,10 +7,6 @@ export class Message {
 
   @Column()
   channelId: string;
-
-  @ManyToOne(() => Channel)
-  @JoinColumn({ name: 'channelId' })
-  channel: Channel;
 
   @Column()
   senderId: string; // sub de Auth0 de quién lo mandó
