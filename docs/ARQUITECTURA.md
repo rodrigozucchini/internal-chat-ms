@@ -4,7 +4,7 @@ Documento técnico de implementación. Para una descripción general del proyect
 
 ## 1. Descripción
 
-Sistema interno de chat en tiempo real entre usuarios autenticados. Arquitectura de microservicios containerizados, sin GraphQL Federation — el Gateway combina los servicios con resolvers manuales. Construido como proyecto de práctica de system design.
+Sistema interno de chat en tiempo real entre usuarios autenticados. Arquitectura de microservicios containerizados — el Gateway expone **GraphQL** (sin Federation, resolvers manuales) para el perfil y **Socket.IO** para el chat, y habla con Profile Service por **gRPC**. Construido como proyecto de práctica de system design.
 
 ## 2. Diagrama de flujo
 

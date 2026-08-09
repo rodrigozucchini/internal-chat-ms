@@ -1,15 +1,15 @@
 # Internal Chat System
 
-Sistema interno de chat en tiempo real entre usuarios autenticados, construido con una arquitectura de microservicios (GraphQL + gRPC, sin Federation). Proyecto de práctica de system design.
+Sistema interno de chat en tiempo real entre usuarios autenticados, construido con una arquitectura de microservicios (GraphQL para perfil, Socket.IO para chat, gRPC entre el Gateway y Profile Service). Proyecto de práctica de system design.
 
 ## Qué hace
 
 - Login con Google vía Auth0.
 - Chat 1 a 1 en tiempo real entre compañeros.
-- Alerta en tiempo real (evento de subscription) cuando llega un mensaje nuevo.
-- Todo containerizado con Docker, pensado para levantar el entorno completo con un solo comando.
+- Alerta en tiempo real (evento `messageReceived` de Socket.IO) cuando llega un mensaje nuevo.
+- Todo containerizado con Docker, se levanta con un solo comando (`docker compose up`).
 
-**Sin frontend** — es un proyecto de práctica de arquitectura backend. Todo se prueba con **Insomnia** (soporta GraphQL, GraphQL Subscriptions y gRPC nativamente).
+**Sin frontend** — es un proyecto de práctica de arquitectura backend. Todo se prueba con **Insomnia** (soporta GraphQL, Socket.IO y gRPC nativamente).
 
 ## Stack
 

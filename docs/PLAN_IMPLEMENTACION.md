@@ -3,7 +3,7 @@
 Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener que integrar todo junto desde el principio. Cada fase termina en algo que se puede probar de forma aislada.
 
 ## Fase 0 — Setup base
-- Estructura de carpetas: `gateway/`, `profile-service/`, `chat-service/`
+- Estructura de carpetas: `gateway/`, `profile-service/`, `chat-service/` (`chat-service/` se retiró más adelante — ver nota de Fusión en la Fase 4)
 - `docker-compose.yml` inicial con solo `postgres` y `redis` (los servicios de app se suman después)
 - Cuenta en Auth0: tenant, aplicación, conexión social con Google, configuración del JWT
 
@@ -23,7 +23,7 @@ Orden sugerido para construir el proyecto en pasos chicos y probables, sin tener
 - [x] Resolver que llama a Profile Service por gRPC (query `miPerfil`) — probado: rechaza sin token, gRPC client conecta bien a Profile Service
 - [x] Probar el login completo — con Device Flow real (Google → Auth0 → Gateway → gRPC); se encontró y arregló un bug real: el primer login de un usuario no tenía perfil creado. Se agregó auto-provisioning: si `GetProfile` devuelve `NOT_FOUND`, el Gateway pide los datos a `/userinfo` de Auth0 y crea el perfil con `UpsertProfile`
 
-## Fase 3 — Chat Service (GraphQL + WebSocket)
+## Fase 3 — Chat Service (GraphQL + WebSocket) — así se construyó en su momento; luego migrado a Socket.IO y fusionado al Gateway, ver notas en Fase 4
 - [x] Inicializar el proyecto Nest — probado: arranca correctamente
 - [x] Tablas `channels` y `messages` en Postgres (`db_chat`), vía TypeORM — probado: se crearon con la relación (FK `channelId`) correcta
 - [x] Mutation `sendMessage` — probada: crea el canal automáticamente y guarda el mensaje. Se agregó también la query `messages(channelId)` (GraphQL exige al menos una Query en el schema, no alcanza con solo una Mutation)
